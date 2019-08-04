@@ -16,19 +16,20 @@
 * Available on all platforms (linux & Windows)
 * Very fast (sqlite is actually fastest than most file system)
 * Strongly tested
-
+* [sqlfs](https://github.com/131/sqlfs) load the whole inode table in memory and use about 1k per file of inode data. So having 100k file will use at least 100MB of memory.
 
 # Supported API
-[sqlfs](https://github.com/131/sqlfs) support most of the fuse API (appart for file body access, see cloudfs for this part)
+[sqlfs](https://github.com/131/sqlfs) support most of the [fuse](https://github.com/mafintosh/fuse-bindings) API (appart for file body access - open, release, read, write - see cloudfs for this part)
 
-** gettattr
-** mkdir
-** readdir
-** rename
-** rmdir
-** statfs
-** unlink
-** touch / create
+- `gettattr`
+- `mkdir`
+- `readdir`
+- `rename`
+- `rmdir`
+- `statfs`
+- `unlink`
+- `touch` / `create`
+
 
 
 # inode table design
