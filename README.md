@@ -33,10 +33,10 @@
 
 # inode table design
 
-| file_uid   | file_name | parent_uid      | file_type | file_size | block_hash | file_ctime | file_mtime |
+| file_uid   | file_name | parent_uid      | file_mode | file_size | block_hash | file_ctime | file_mtime |
 | ---        | ---       | ---             | ---       | ---       | ---        | ---        | ---        |
-| (someguid) | usr       | (someotherguid) | directory | 0         | *null*     | 1560000505 | 1560000505 |
-| (someguid) | "foo"     | (someotherguid) | file      | 2323      | (file md5) | 1560000505 | 1560000505 |
+| (someguid) | usr       | (someotherguid) | S_IFDIR \| 0o777 | 0         | *null*     | 1560000505 | 1560000505 |
+| (someguid) | "foo"     | (someotherguid) | S_IFREG \| 0o666   | 2323      | (file md5) | 1560000505 | 1560000505 |
 
 
 # Credits
