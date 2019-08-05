@@ -31,7 +31,6 @@
 - `touch` / `create`
 
 
-
 # inode table design
 
 | file_uid   | file_name | parent_uid      | file_type | file_size | block_hash | file_ctime | file_mtime |
