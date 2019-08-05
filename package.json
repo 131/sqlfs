@@ -9,7 +9,7 @@
     "checkall": "npm run eslint",
     "mocha": "node node_modules/mocha/bin/_mocha -b",
     "cover": "nyc --temp-directory coverage/.nyc_output --reporter text-summary --reporter html --reporter lcov  mocha",
-    "test" : "npm run eslint && npm run cover",
+    "test": "npm run eslint && npm run cover",
     "coveralls": "npm install coveralls && node ./node_modules/coveralls/bin/coveralls.js < ./coverage/lcov.info"
   },
   "devDependencies": {
@@ -34,6 +34,8 @@
   },
   "homepage": "https://github.com/131/sqlfs#readme",
   "dependencies": {
-    "@131/sqlite3": "^4.0.9"
+    "mout": "^1.0.0",
+    "nyks": "^5.12.5",
+    "osqlite": "^1.0.1"
   }
 }
