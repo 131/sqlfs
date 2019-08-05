@@ -249,7 +249,7 @@ class Sqlfs {
     console.log("Get getattr", file_path);
     var entry = await this._get_entry(file_path);
 
-    var {file_mode : mode, file_size : size, file_mtime : mtime} = entry, mode;
+    var {file_mode : mode, file_size : size, file_mtime : mtime} = entry;
 
     var stat = {
       atime : new Date(),
