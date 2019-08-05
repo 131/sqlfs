@@ -68,6 +68,8 @@ class Sqlfs {
     //check for a valid root mountpoint
     try {
       let line = await this.ctx.row('cloudfs_files_list', ['file_mode = parent_uid', `(${S_IFMT} & file_mode) = ${S_IFDIR}`]);
+      if(!line)
+        throw `Database is corrupted`;
     } catch(err) {
       return false;
     }
