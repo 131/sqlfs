@@ -15,8 +15,10 @@ const EMPTY_MD5 = md5('');
 const {S_IFMT, S_IFREG, S_IFDIR} = fs.constants; //S_IFCHR, S_IFBLK, S_IFIFO, S_IFLNK, S_IFSOCK
 //const {O_RDONLY, O_WRONLY, O_RDWR} = fs.constants;
 
+const schema_version = 20190806;
 
 const Context = require('osqlite/lnk'); //or 'osqlite'
+const SQL = Context.SQL;
 
 class Sqlfs {
 
@@ -31,6 +33,7 @@ class Sqlfs {
 
     if(fs.existsSync(this.index_path))
       fs.unlinkSync(this.index_path);
+
     this.ctx = new Context(this.index_path);
 
     //create table structure
@@ -43,7 +46,7 @@ class Sqlfs {
       file_ctime integer DEFAULT (strftime('%s','now')) NOT NULL,
       file_mtime integer DEFAULT (strftime('%s','now')) NOT NULL,
       file_mode integer NOT NULL,
-      CONSTRAINT cloudfs_files_list_parent_uid_foreign FOREIGN KEY (parent_uid) REFERENCES cloudfs_files_list(file_uid) ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED
+      CONSTRAINT cloudfs_files_list_parent_uid_foreign FOREIGN KEY (parent_uid) REFERENCES cloudfs_files_list(file_uid) ON UPDATE CASCADE ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
      );
     `);
 
@@ -51,6 +54,8 @@ class Sqlfs {
      CREATE UNIQUE INDEX cloudfs_files_list_idx_1 ON cloudfs_files_list
       (file_name, parent_uid);
     `);
+
+    await this.ctx.raw(`PRAGMA user_version = ${schema_version};`);
 
     let file_uid = guid();
     let file_name = '';
@@ -62,14 +67,22 @@ class Sqlfs {
   async is_valid() {
     //check for a valid root mountpoint
     try {
-      var line = await this.ctx.row('cloudfs_files_list', ['file_mode = parent_uid', `(${S_IFMT} & file_mode) = ${S_IFDIR}`]);
-      return !!line;
+      let line = await this.ctx.row('cloudfs_files_list', ['file_mode = parent_uid', `(${S_IFMT} & file_mode) = ${S_IFDIR}`]);
     } catch(err) {
       return false;
     }
+
+    let user_version = await this.ctx.value(SQL`PRAGMA user_version`);
+    if(user_version != schema_version)
+      throw `Inconsistent database version, current engine is ${schema_version} vs requested file ${user_version}`;
+
+    return true;
   }
 
   async warmup() {
+    if(this.ctx)
+      await this.ctx.close();
+
     this.ctx = new Context(this.index_path);
 
     if(!await this.is_valid())
@@ -93,9 +106,6 @@ class Sqlfs {
         root = entry;
       entries[entry.file_uid] = entry;
     }
-
-    if(!root)
-      throw `Invalid file system`;
 
     //2nd pass, feed parent list
     for(let entry of all) {
@@ -228,19 +238,18 @@ class Sqlfs {
     var now = Math.floor(Date.now() / 1000);
     let data = {file_mtime : now};
     await this.ctx.lnk.update('cloudfs_files_list', data, {file_uid : entry.file_uid});
+
+    //cache management
     update(entry, data);
   }
 
   async readdir(directory_path) {
-    let parent = await this._get_entry(directory_path);
-    console.log("readdir", parent.file_uid);
-    let result = [];
-    for(let line in this.entries) {
-      let entry = this.entries[line];
-      if(entry.parent_uid == parent.file_uid && entry.file_uid != parent.file_uid)
-        result.push(entry.file_name);
-    }
-    return result;
+    let entry = await this._get_entry(directory_path);
+
+    if((S_IFMT & entry.file_mode) != S_IFDIR)
+      throw fuse.ENOTDIR;
+
+    return Object.keys(entry.children);
   }
 
 
@@ -315,12 +324,12 @@ class Sqlfs {
       parent_uid : dst_parent.file_uid,
     };
 
-
     await this.ctx.lnk.update('cloudfs_files_list', data, {file_uid : src.file_uid});
 
-    delete src_parent.children[path.basename[src_path]];
+    //cache management
+    delete src_parent.children[src.file_name];
     dst_parent.children[data.file_name] = src;
-
+    update(src, data);
     return 0;
   }
 
@@ -334,22 +343,49 @@ class Sqlfs {
 
     await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
     await this.touch(path.dirname(file_path));
+
+    //cache management
+    var src_parent = await this._get_entry(path.dirname(file_path));
+    delete src_parent.children[entry.file_name];
   }
 
   async rmdir(directory_path) {
     console.log("rmdir", directory_path);
-
     var entry = await this._get_entry(directory_path);
+
+    if(directory_path == "/")
+      throw fuse.EPERM;
 
     if((S_IFMT & entry.file_mode) != S_IFDIR)
       throw fuse.ENOTDIR;
 
-    if(entry.children.length != 0)
+    if(Object.keys(entry.children).length != 0)
       throw fuse.ENOTEMPTY;
 
     await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
-
     await this.touch(path.dirname(directory_path));
+
+    //cache management
+    var src_parent = await this._get_entry(path.dirname(directory_path));
+    delete src_parent.children[entry.file_name];
+  }
+
+  async rmrf(directory_path) {
+    console.log("rmrf", directory_path);
+    var entry = await this._check_entry(directory_path);
+    if(!entry)
+      return;
+
+    if(directory_path == "/")
+      throw fuse.EPERM;
+
+    //will delete cascade
+    await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
+    await this.touch(path.dirname(directory_path));
+
+    //cache management
+    var src_parent = await this._get_entry(path.dirname(directory_path));
+    delete src_parent.children[entry.file_name];
   }
 
 
@@ -383,9 +419,11 @@ class Sqlfs {
     };
 
     await this.ctx.lnk.insert('cloudfs_files_list', data);
+    await this.touch(parent_path);
+
+    //cache management
     parent.children[data.file_name] = {...data, children : {}};
 
-    await this.touch(parent_path);
     return 0;
   }
 }
