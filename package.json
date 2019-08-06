@@ -34,8 +34,10 @@
   },
   "homepage": "https://github.com/131/sqlfs#readme",
   "dependencies": {
+    "debug": "^2.3.2",
     "mout": "^1.0.0",
     "nyks": "^5.12.5",
-    "osqlite": "^1.0.1"
+    "osqlite": "^1.0.1",
+    "progress": "^1.1.8"
   }
 }

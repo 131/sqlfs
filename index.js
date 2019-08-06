@@ -7,10 +7,15 @@ const path = require('path').posix;
 const fuse = require('./lib/fuse'); //errors code only
 const guid = require('mout/random/guid');
 const update = require('mout/object/mixIn');
-
+const ProgressBar = require('progress');
 const md5 = require('nyks/crypto/md5');
 const EMPTY_MD5 = md5('');
-
+const debug  = require('debug');
+const logger = {
+  error : debug('sqlfs:error'),
+  info  : debug('sqlfs:info'),
+  debug : debug('sqlfs:debug'),
+};
 
 const {S_IFMT, S_IFREG, S_IFDIR} = fs.constants; //S_IFCHR, S_IFBLK, S_IFIFO, S_IFLNK, S_IFSOCK
 //const {O_RDONLY, O_WRONLY, O_RDWR} = fs.constants;
@@ -45,8 +50,11 @@ class Sqlfs {
   }
 
   async load(payload, withdir) {
+    logger.info("Loading %d files in current tree", payload.length);
+    var bar = new ProgressBar("[:bar] :percent :etas", {total : payload.length, width : 60, incomplete : ' ', clear : true});
     for(let entry of payload) {
-      if((S_IFMT & entry.file_mode) == S_IFREG || withdir)
+      bar.tick(1);
+      if((S_IFMT & entry.file_mode) == S_IFREG || withdir || !entry.file_mode)
         await this.register_file(entry.file_path, entry);
     }
   }
@@ -76,7 +84,7 @@ class Sqlfs {
       fs.unlinkSync(this.index_path);
 
     this.ctx = new Context(this.index_path);
-    console.log("New database structure in", this.index_path);
+    logger.info("New database structure in", this.index_path);
     //create table structure
     await this.ctx.raw(`
      CREATE TABLE cloudfs_files_list (
@@ -191,7 +199,7 @@ class Sqlfs {
 
 
   async create(file_path, mode) {
-    console.log('create(%s, %d)', file_path, mode);
+    logger.debug('create(%s, %d)', file_path, mode);
     var entry = await this._check_entry(file_path);
     if(entry)
       throw fuse.EEXIST;
@@ -219,7 +227,7 @@ class Sqlfs {
 
 
   async touch(file_path) {
-    console.log("touch", file_path);
+    logger.debug("touch", file_path);
     var entry = await this._check_entry(file_path);
     if(!entry)
       return await this.create(file_path);
@@ -244,7 +252,7 @@ class Sqlfs {
 
 
   async getattr(file_path) {
-    console.log("Get getattr", file_path);
+    logger.debug("Get getattr", file_path);
     var entry = await this._get_entry(file_path);
 
     var {file_mode : mode, file_size : size, file_mtime : mtime} = entry;
@@ -265,11 +273,11 @@ class Sqlfs {
 
   async statfs(path) {
     //={Bsize:4096 Frsize:4096 Blocks:274877906944 Bfree:273011914316 Bavail:274877906944 Files:1000000000 Ffree:1000000000 Favail:0 Fsid:0 Flag:0 Namemax:255}
-    console.log('statfs(%s)', path);
+    logger.debug('statfs(%s)', path);
 
     let files  = Number(await this.ctx.lnk.value('cloudfs_files_list', true, 'COUNT(*)'));
 
-    console.log('statfs(%s)', path);
+    logger.debug('statfs(%s)', path);
     let total = 2; //files.reduce((acc, val) => (acc + val.file_size), 0);
 
     var bsize = 1000000;
@@ -298,12 +306,13 @@ class Sqlfs {
 
 
   async rename(src_path, dest_path) {
+    logger.debug('rename', src_path, dest_path);
+
     if(src_path == dest_path)
       return;
 
     let src = await this._get_entry(src_path);
 
-    console.log('rename', src_path, dest_path, src);
 
     var src_parent = await this._get_entry(path.dirname(src_path));
     var dst_parent = await this._get_entry(path.dirname(dest_path));
@@ -324,7 +333,7 @@ class Sqlfs {
 
 
   async unlink(file_path) {
-    console.log("unlink", file_path);
+    logger.debug("unlink", file_path);
 
     var entry = await this._get_entry(file_path);
     if((S_IFMT & entry.file_mode) != S_IFREG)
@@ -339,7 +348,7 @@ class Sqlfs {
   }
 
   async rmdir(directory_path) {
-    console.log("rmdir", directory_path);
+    logger.debug("rmdir", directory_path);
     var entry = await this._get_entry(directory_path);
 
     if(directory_path == "/")
@@ -360,7 +369,7 @@ class Sqlfs {
   }
 
   async rmrf(directory_path) {
-    console.log("rmrf", directory_path);
+    logger.debug("rmrf", directory_path);
     var entry = await this._check_entry(directory_path);
     if(!entry)
       return;
@@ -379,7 +388,7 @@ class Sqlfs {
 
 
   async mkdirp(directory_path) {
-    console.log("mkdirp", directory_path);
+    logger.debug("mkdirp", directory_path);
     var entry = await this._check_entry(directory_path);
     if(entry) {
       if((S_IFMT & entry.file_mode) != S_IFDIR)
@@ -393,7 +402,7 @@ class Sqlfs {
   }
 
   async mkdir(directory_path, mode) {
-    console.log("mkdir", directory_path, mode);
+    logger.debug("mkdir", directory_path, mode);
     var entry = await this._check_entry(directory_path);
     if(entry)
       throw fuse.EEXIST;
