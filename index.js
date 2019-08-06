@@ -76,7 +76,7 @@ class Sqlfs {
       fs.unlinkSync(this.index_path);
 
     this.ctx = new Context(this.index_path);
-
+    console.log("New database structure in", this.index_path);
     //create table structure
     await this.ctx.raw(`
      CREATE TABLE cloudfs_files_list (
@@ -109,7 +109,8 @@ class Sqlfs {
   async is_valid() {
     //check for a valid root mountpoint
     try {
-      let line = await this.ctx.row('cloudfs_files_list', ['file_mode = parent_uid', `(${S_IFMT} & file_mode) = ${S_IFDIR}`]);
+      let line = await this.ctx.row('cloudfs_files_list', ['file_uid = parent_uid', `(${S_IFMT} & file_mode) = ${S_IFDIR}`]);
+
       if(!line)
         throw `Database is corrupted`;
     } catch(err) {
@@ -129,11 +130,13 @@ class Sqlfs {
 
     this.ctx = new Context(this.index_path);
 
-    if(!await this.is_valid())
+    let new_db = !await this.is_valid();
+    if(new_db)
       await this.init_fs(); //re-init all fs
 
     //now computing all stuffs
     this.entries = await this._compute();
+    return new_db;
   }
 
 
@@ -160,64 +163,6 @@ class Sqlfs {
     }
     return root;
   }
-
-  _computeold_(files, blocks) {
-    //file_uid, block_hash, file_name, parent_uid, file_ctime, file_mtime, file_mode
-    //entries is a tree of full filepath to all items
-    let entries = {};
-    blocks = blocks.reduce((acc, block) => (acc[path.basename(block.name)] = block, acc), {});
-    let root_guid = guid();
-
-    entries['/'] = {
-      file_uid : root_guid, parent_uid : root_guid, file_name : '',
-      file_mtime : new Date(),
-      file_ctime : new Date(),
-      file_size  : 0,
-      file_mode  : (S_IFMT & S_IFDIR) | 0o777,
-    };
-
-    for(let filepath in files) {
-      let block_hash = files[filepath];
-      let filepaths = filepath.split('/');
-
-      for(let i = 1; i < filepaths.length; i++) {
-        let dirfull = '/' + filepaths.slice(1, i).join('/');
-        let parentPath = '/' + filepaths.slice(1, i - 1).join('/');
-        if(entries[dirfull])
-          continue;
-        let parent = entries[parentPath];
-        if(!parent)
-          throw `No parent '${dirfull}' '${parentPath}' `;
-
-        entries[dirfull] = {
-          file_uid : guid(), parent_uid : parent.file_uid, file_name : filepaths[i - 1],
-          file_mtime : new Date(),
-          file_ctime : new Date(),
-          file_size  : 0,
-          file_mode  : (S_IFMT & S_IFDIR) | 0o777,
-        };
-      }
-
-      let parent = entries['/' + filepaths.slice(1, filepaths.length - 1).join('/')];
-      if(!parent)
-        throw "No parent";
-
-      let block = blocks[block_hash];
-
-      entries[filepath] = {
-        file_uid : guid(), parent_uid : parent.file_uid, file_name : filepaths[filepaths.length - 1],
-        block_hash,
-        file_mtime : new Date(block['last_modified']),
-        file_ctime : new Date(block['last_modified']),
-        file_size  : block.bytes,
-        file_mode : (S_IFMT & S_IFREG) | 0o666,
-      };
-    }
-
-    //fs.writeFileSync('entries.json', JSON.stringify((entries), null, 2)); process.exit();
-    return entries;
-  }
-
 
   //return false in an entry does not exists
   async _check_entry(file_path) {
