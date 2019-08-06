@@ -10,10 +10,6 @@ const fuse = require('../lib/fuse');
 const guid = require('mout/random/guid');
 
 
-/**
-* See errors table https://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html
-*/
-
 describe("initial test suite", function() {
   let ctx, tmpfile = tmppath("sqlite");
 
@@ -34,12 +30,13 @@ describe("initial test suite", function() {
   });
 
 
-  it("should support touch", async() => {
+  it("should support touch", async () => {
     let file_name  = guid();
-    let res = await ctx.touch(`/${file_name}`);
+    await ctx.touch(`/${file_name}`);
     let stat = await ctx.getattr(`/${file_name}`);
     expect(stat).to.be.ok();
   });
+
 
   it("should have to trouble closing and opening again", async () => {
     await ctx.ctx.close();
@@ -48,7 +45,7 @@ describe("initial test suite", function() {
   });
 
 
-  it("should failed on accessing non absolute paths", async() => {
+  it("should failed on accessing non absolute paths", async () => {
     try {
       await ctx.getattr(`somepath`);
       expect().to.fail("Never here");
@@ -58,14 +55,14 @@ describe("initial test suite", function() {
   });
 
 
-  it("should support unlink", async() => {
+  it("should support unlink", async () => {
     let file_name  = guid();
 
     await ctx.touch(`/${file_name}`);
     await ctx.unlink(`/${file_name}`);
 
     try {
-      let stat = await ctx.getattr(`/${file_name}`);
+      await ctx.getattr(`/${file_name}`);
       expect().to.fail("Never here");
     } catch(err) {
       expect(err).to.eql(fuse.ENOENT);
@@ -90,7 +87,7 @@ describe("initial test suite", function() {
   });
 
 
-  it("should failed on touching file in non-existant directories", async() => {
+  it("should failed on touching file in non-existant directories", async () => {
     let parent_dir = guid();
     let file_name  = guid();
     try {
@@ -99,10 +96,10 @@ describe("initial test suite", function() {
     } catch(err) {
       expect(err).to.eql(fuse.ENOENT);
     }
-    
+
   });
 
-  it("should support readdir", async() => {
+  it("should support readdir", async () => {
     await ctx.mkdirp("/this/is/some/folder");
     await ctx.touch("/this/is/some/file");
     await ctx.touch("/this/is/some/.gitignore");
@@ -126,25 +123,25 @@ describe("initial test suite", function() {
     } catch(err) {
       expect(err).to.eql(fuse.ENOTDIR);
     }
-  })
+  });
 
 
 
-  it("should rename file", async() => {
+  it("should rename file", async () => {
     let file_name  = "oldfilename";
     let new_name   = "newfilename";
     await ctx.touch(`/${file_name}`);
 
-      //this does nothing (nor breaks anything)
+    //this does nothing (nor breaks anything)
     await ctx.rename(`/${file_name}`, `/${file_name}`);
 
     let inode = await ctx._get_entry(`/${file_name}`);
     await ctx.rename(`/${file_name}`, `/${new_name}`);
-    
+
     let new_inode = await ctx._get_entry(`/${new_name}`);
 
     expect(new_inode.file_name).to.eql(new_name);
-      //new file exists
+    //new file exists
     expect(new_inode.file_uid).to.eql(inode.file_uid);
 
     //old file is missing
@@ -156,14 +153,14 @@ describe("initial test suite", function() {
     }
   });
 
-  it("should support recursive mkdir", async() => {
+  it("should support recursive mkdir", async () => {
     let file_path = "/this/is/a/ path /with/subdirectories";
     await ctx.mkdirp(file_path);
     let stat = await ctx.getattr(file_path);
     expect(stat).to.be.ok();
   });
 
-  it("should reject non recursive mkdir", async() => {
+  it("should reject non recursive mkdir", async () => {
     let file_path = "/this/is/another/path/with/subdirectories";
 
     try {
@@ -176,7 +173,7 @@ describe("initial test suite", function() {
   });
 
 
-  it("should rename subdirectories and file", async() => {
+  it("should rename subdirectories and file", async () => {
     let file_path = "/this/is/a/ path /with/subdirectories/and/a/file";
     await ctx.mkdirp(path.dirname(file_path));
     await ctx.touch(file_path);
@@ -188,7 +185,7 @@ describe("initial test suite", function() {
     expect(new_inode.file_uid).to.eql(inode.file_uid);
   });
 
-  it("should support rmdir", async() => {
+  it("should support rmdir", async () => {
     let file_path = "/this/is/a/directory/to/be/removed";
     await ctx.mkdirp(file_path);
 
@@ -211,7 +208,7 @@ describe("initial test suite", function() {
     }
   });
 
-  it("should support rmrf", async() => {
+  it("should support rmrf", async () => {
     let file_path = "/here/is/a/directory/to/be/removed";
     await ctx.mkdirp(file_path);
     await ctx.rmrf("/here/is");
@@ -226,7 +223,6 @@ describe("initial test suite", function() {
     } catch(err) {
       expect(err).to.eql(fuse.EPERM);
     }
-
   });
 
 

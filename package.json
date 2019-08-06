@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "preversion": "npm run checkall",
-    "eslint": "eslint index.js",
+    "eslint": "eslint .",
     "checkall": "npm run eslint",
     "mocha": "node node_modules/mocha/bin/_mocha -b",
     "cover": "nyc --temp-directory coverage/.nyc_output --reporter text-summary --reporter html --reporter lcov  mocha",

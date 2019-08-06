@@ -26,6 +26,47 @@ class Sqlfs {
     this.index_path = index_path;
   }
 
+  serialize(withdir) {
+    let files = [];
+    let flatten = function(node, paths) {
+      let {file_name, file_size, block_hash, file_mode} = node;
+      let data = {
+        file_path : path.join(paths, file_name),
+        file_size, block_hash, file_mode,
+      };
+      if((S_IFMT & node.file_mode) == S_IFREG || withdir)
+        files.push(data);
+      for(let filename in node.children || {})
+        flatten(node.children[filename], data.file_path);
+    };
+
+    flatten(this.entries, "/");
+    return files;
+  }
+
+  async load(payload, withdir) {
+    for(let entry of payload) {
+      if((S_IFMT & entry.file_mode) == S_IFREG || withdir)
+        await this.register_file(entry.file_path, entry);
+    }
+  }
+
+  async register_file(file_path, file_data) {
+    await this.mkdirp(path.dirname(file_path));
+    let parent = await this._get_entry(path.dirname(file_path));
+    var data  = {
+      file_uid   : guid(),
+      file_name  : path.basename(file_path),
+      parent_uid : parent.file_uid,
+      block_hash : file_data.block_hash,
+      file_size  : file_data.file_size,
+      file_mode  : file_data.file_mode || ((S_IFMT & S_IFREG) | 0o666),
+    };
+
+    await this.ctx.lnk.insert('cloudfs_files_list', data);
+    parent.children[data.file_name] = {...data, children : {}};
+  }
+
 
   async init_fs() {
     if(this.ctx)
@@ -40,12 +81,13 @@ class Sqlfs {
     await this.ctx.raw(`
      CREATE TABLE cloudfs_files_list (
       file_uid uuid NOT NULL CONSTRAINT cloudfs_files_list_pkey PRIMARY KEY,
-      block_hash character varying(32),
+      block_hash character varying(32) DEFAULT NULL,
       file_name character varying(128),
+      file_size INTEGER NOT NULL DEFAULT 0,
       parent_uid uuid NOT NULL,
       file_ctime integer DEFAULT (strftime('%s','now')) NOT NULL,
       file_mtime integer DEFAULT (strftime('%s','now')) NOT NULL,
-      file_mode integer NOT NULL,
+      file_mode INTEGER NOT NULL,
       CONSTRAINT cloudfs_files_list_parent_uid_foreign FOREIGN KEY (parent_uid) REFERENCES cloudfs_files_list(file_uid) ON UPDATE CASCADE ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
      );
     `);
@@ -130,7 +172,7 @@ class Sqlfs {
       file_uid : root_guid, parent_uid : root_guid, file_name : '',
       file_mtime : new Date(),
       file_ctime : new Date(),
-      file_size  : 100,
+      file_size  : 0,
       file_mode  : (S_IFMT & S_IFDIR) | 0o777,
     };
 
@@ -151,7 +193,7 @@ class Sqlfs {
           file_uid : guid(), parent_uid : parent.file_uid, file_name : filepaths[i - 1],
           file_mtime : new Date(),
           file_ctime : new Date(),
-          file_size  : 100,
+          file_size  : 0,
           file_mode  : (S_IFMT & S_IFDIR) | 0o777,
         };
       }
@@ -212,13 +254,13 @@ class Sqlfs {
 
     var parent_path = path.dirname(file_path);
     var parent = await this._get_entry(parent_path);
-    var block_hash  = EMPTY_MD5;
     var file_name   = path.basename(file_path);
     var data  = {
       file_uid   : guid(),
       file_name,
       parent_uid : parent.file_uid,
-      block_hash,
+      block_hash : EMPTY_MD5,
+      file_size  : 0,
       file_mode  : (S_IFMT & S_IFREG) | 0o666,
     };
 
@@ -417,6 +459,8 @@ class Sqlfs {
       file_uid   : guid(),
       file_name  : path.basename(directory_path),
       parent_uid : parent.file_uid,
+      file_size  : 0,
+      block_hash : null,
       file_mode  : (S_IFMT & S_IFDIR) | 0o777,
     };
 
