@@ -9,6 +9,7 @@ const guid = require('mout/random/guid');
 const update = require('mout/object/mixIn');
 const ProgressBar = process.env.CI ? class mock { tick() {}} : require('progress');
 const md5 = require('nyks/crypto/md5');
+
 const EMPTY_MD5 = md5('');
 const debug  = require('debug');
 const logger = {
@@ -31,6 +32,10 @@ class Sqlfs {
     this.index_path = index_path;
   }
 
+  async _execute(verb, ...args) {
+    await this.ctx.lnk[verb]('cloudfs_files_list', ...args);
+  }
+
   serialize(withdir) {
     let files = [];
     let flatten = function(node, paths) {
@@ -50,6 +55,7 @@ class Sqlfs {
   }
 
   async load(payload, withdir) {
+    let token = await this.ctx.lnk.begin();
     logger.info("Loading %d files in current tree", payload.length);
     var bar = new ProgressBar("[:bar] :percent :etas", {total : payload.length, width : 60, incomplete : ' ', clear : true});
     for(let entry of payload) {
@@ -57,6 +63,7 @@ class Sqlfs {
       if((S_IFMT & entry.file_mode) == S_IFREG || withdir || !entry.file_mode)
         await this.register_file(entry.file_path, entry);
     }
+    await this.ctx.lnk.commit(token);
   }
 
   async register_file(file_path, file_data) {
@@ -71,8 +78,13 @@ class Sqlfs {
       file_mode  : file_data.file_mode || ((S_IFMT & S_IFREG) | 0o666),
     };
 
-    await this.ctx.lnk.insert('cloudfs_files_list', data);
+    await this._execute("insert", data);
     parent.children[data.file_name] = {...data, children : {}};
+  }
+
+  async close() {
+    if(this.ctx)
+      await this.ctx.close();
   }
 
 
@@ -113,6 +125,8 @@ class Sqlfs {
     let root = {file_uid, parent_uid : file_uid, file_name, file_mode};
     await this.ctx.lnk.insert('cloudfs_files_list', root);
   }
+
+
 
   async is_valid() {
     //check for a valid root mountpoint
@@ -217,9 +231,9 @@ class Sqlfs {
       file_mode  : (S_IFMT & S_IFREG) | 0o666,
     };
 
+    await this._execute("insert", data); //no await
     parent.children[file_name] = {...data, children : {}};
 
-    await this.ctx.lnk.insert('cloudfs_files_list', data);
     await this.touch(parent_path);
   }
 
@@ -234,9 +248,8 @@ class Sqlfs {
 
     var now = Math.floor(Date.now() / 1000);
     let data = {file_mtime : now};
-    await this.ctx.lnk.update('cloudfs_files_list', data, {file_uid : entry.file_uid});
 
-    //cache management
+    await this._execute("update", data, {file_uid : entry.file_uid});
     update(entry, data);
   }
 
@@ -322,12 +335,10 @@ class Sqlfs {
       parent_uid : dst_parent.file_uid,
     };
 
-    await this.ctx.lnk.update('cloudfs_files_list', data, {file_uid : src.file_uid});
-
-    //cache management
+    await this._execute('update', data, {file_uid : src.file_uid});
+    update(src, data);
     delete src_parent.children[src.file_name];
     dst_parent.children[data.file_name] = src;
-    update(src, data);
     return 0;
   }
 
@@ -339,12 +350,11 @@ class Sqlfs {
     if((S_IFMT & entry.file_mode) != S_IFREG)
       throw fuse.EISDIR;
 
-    await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
-    await this.touch(path.dirname(file_path));
-
-    //cache management
     var src_parent = await this._get_entry(path.dirname(file_path));
+
+    await this._execute("delete", {file_uid : entry.file_uid});
     delete src_parent.children[entry.file_name];
+    await this.touch(path.dirname(file_path));
   }
 
   async rmdir(directory_path) {
@@ -360,12 +370,11 @@ class Sqlfs {
     if(Object.keys(entry.children).length != 0)
       throw fuse.ENOTEMPTY;
 
-    await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
-    await this.touch(path.dirname(directory_path));
-
-    //cache management
     var src_parent = await this._get_entry(path.dirname(directory_path));
+
+    await this._execute("delete", {file_uid : entry.file_uid});
     delete src_parent.children[entry.file_name];
+    await this.touch(path.dirname(directory_path));
   }
 
   async rmrf(directory_path) {
@@ -377,13 +386,12 @@ class Sqlfs {
     if(directory_path == "/")
       throw fuse.EPERM;
 
-    //will delete cascade
-    await this.ctx.lnk.delete('cloudfs_files_list', {file_uid : entry.file_uid});
-    await this.touch(path.dirname(directory_path));
-
-    //cache management
     var src_parent = await this._get_entry(path.dirname(directory_path));
+
+    //will delete cascade
+    await this._execute('delete', {file_uid : entry.file_uid});
     delete src_parent.children[entry.file_name];
+    await this.touch(path.dirname(directory_path));
   }
 
 
@@ -418,12 +426,10 @@ class Sqlfs {
       file_mode  : (S_IFMT & S_IFDIR) | 0o777,
     };
 
-    await this.ctx.lnk.insert('cloudfs_files_list', data);
-    await this.touch(parent_path);
-
-    //cache management
+    await this._execute("insert", data);
     parent.children[data.file_name] = {...data, children : {}};
 
+    await this.touch(parent_path);
     return 0;
   }
 }
