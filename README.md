@@ -28,7 +28,13 @@
 - `rmdir`
 - `statfs`
 - `unlink`
-- `touch` / `create`
+- `utimens`
+- `create`
+
+## Helpers
+- `touch`
+- `mkdirp`
+- `rmrf`
 
 
 # inode table design

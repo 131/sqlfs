@@ -105,8 +105,8 @@ class Sqlfs {
       file_name character varying(128),
       file_size INTEGER NOT NULL DEFAULT 0,
       parent_uid uuid NOT NULL,
-      file_ctime integer DEFAULT (strftime('%s','now')) NOT NULL,
-      file_mtime integer DEFAULT (strftime('%s','now')) NOT NULL,
+      file_ctime REAL DEFAULT (strftime('%s','now')) NOT NULL,
+      file_mtime REAL DEFAULT (strftime('%s','now')) NOT NULL,
       file_mode INTEGER NOT NULL,
       CONSTRAINT cloudfs_files_list_parent_uid_foreign FOREIGN KEY (parent_uid) REFERENCES cloudfs_files_list(file_uid) ON UPDATE CASCADE ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
      );
@@ -237,7 +237,16 @@ class Sqlfs {
     await this.touch(parent_path);
   }
 
+  async update(entry, data) {
+    await this._execute("update", data, {file_uid : entry.file_uid});
+    update(entry, data);
+  }
 
+  async utimens(file_path, atime, mtime) {
+    logger.debug("utimens", file_path, atime, mtime);
+    var entry = await this._get_entry(file_path);
+    await this.update(entry, {file_mtime : mtime / 1000});
+  }
 
 
   async touch(file_path) {
@@ -246,11 +255,7 @@ class Sqlfs {
     if(!entry)
       return await this.create(file_path);
 
-    var now = Math.floor(Date.now() / 1000);
-    let data = {file_mtime : now};
-
-    await this._execute("update", data, {file_uid : entry.file_uid});
-    update(entry, data);
+    await this.update(entry, {file_mtime : Date.now() / 1000});
   }
 
   async readdir(directory_path) {
@@ -263,17 +268,17 @@ class Sqlfs {
   }
 
 
-
   async getattr(file_path) {
     logger.debug("Get getattr", file_path);
     var entry = await this._get_entry(file_path);
 
-    var {file_mode : mode, file_size : size, file_mtime : mtime} = entry;
+    var {file_mode : mode, file_size : size, file_mtime : mtime, file_ctime : ctime} = entry;
 
     var stat = {
       atime : new Date(),
-      ctime : mtime,
-      mtime, size, mode,
+      ctime : ctime * 1000,
+      mtime : mtime * 1000,
+      size, mode,
       nlink : 1,
 
       //https://github.com/billziss-gh/winfsp/issues/40
@@ -326,19 +331,15 @@ class Sqlfs {
 
     let src = await this._get_entry(src_path);
 
-
     var src_parent = await this._get_entry(path.dirname(src_path));
     var dst_parent = await this._get_entry(path.dirname(dest_path));
 
-    var data = {
+    delete src_parent.children[src.file_name];
+    await this.update(src, {
       file_name  : path.basename(dest_path),
       parent_uid : dst_parent.file_uid,
-    };
-
-    await this._execute('update', data, {file_uid : src.file_uid});
-    update(src, data);
-    delete src_parent.children[src.file_name];
-    dst_parent.children[data.file_name] = src;
+    });
+    dst_parent.children[src.file_name] = src;
     return 0;
   }
 
