@@ -67,6 +67,7 @@ class Sqlfs {
   }
 
   async register_file(file_path, file_data) {
+    file_path = path.normalize(file_path);
     await this.mkdirp(path.dirname(file_path));
     let parent = await this._get_entry(path.dirname(file_path));
     var data  = {
@@ -197,6 +198,7 @@ class Sqlfs {
 
 
   async _get_entry(file_path) {
+    file_path = path.normalize(file_path);
     let node  = this.entries;
     if(file_path == '/')
       return node;
@@ -213,6 +215,7 @@ class Sqlfs {
 
 
   async create(file_path, mode) {
+    file_path = path.normalize(file_path);
     logger.debug('create(%s, %d)', file_path, mode);
     var entry = await this._check_entry(file_path);
     if(entry)
@@ -397,6 +400,7 @@ class Sqlfs {
 
 
   async mkdirp(directory_path) {
+    directory_path = path.normalize(directory_path);
     logger.debug("mkdirp", directory_path);
     var entry = await this._check_entry(directory_path);
     if(entry) {

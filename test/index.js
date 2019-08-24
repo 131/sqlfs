@@ -154,7 +154,7 @@ describe("initial test suite", function() {
   });
 
   it("should support recursive mkdir", async () => {
-    let file_path = "/this/is/a/ path /with/subdirectories";
+    let file_path = "//this/is/a/ path //with/subdirectories";
     await ctx.mkdirp(file_path);
     let stat = await ctx.getattr(file_path);
     expect(stat).to.be.ok();
@@ -186,7 +186,7 @@ describe("initial test suite", function() {
   });
 
   it("should support rmdir", async () => {
-    let file_path = "/this/is/a/directory/to/be/removed";
+    let file_path = "/this/is/a/directory/./to/be/removed";
     await ctx.mkdirp(file_path);
 
     try {
