@@ -8,7 +8,7 @@
     "eslint": "eslint .",
     "checkall": "npm run eslint",
     "mocha": "node node_modules/mocha/bin/_mocha -b",
-    "cover": "nyc --temp-directory coverage/.nyc_output --reporter text-summary --reporter html --reporter lcov  mocha",
+    "cover": "nyc --temp-directory coverage/.nyc_output --reporter text-summary --reporter html --reporter lcov  mocha -b",
     "test": "npm run eslint && npm run cover",
     "coveralls": "npm install coveralls && node ./node_modules/coveralls/bin/coveralls.js < ./coverage/lcov.info"
   },
@@ -37,7 +37,7 @@
     "debug": "^2.3.2",
     "mout": "^1.0.0",
     "nyks": "^5.12.5",
-    "osqlite": "^1.0.1",
+    "osqlite": "^1.1.1",
     "progress": "^1.1.8"
   }
 }

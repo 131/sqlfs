@@ -23,8 +23,8 @@ const {S_IFMT, S_IFREG, S_IFDIR} = fs.constants; //S_IFCHR, S_IFBLK, S_IFIFO, S_
 
 const schema_version = 20190806;
 
-const Context = require('osqlite/lnk'); //or 'osqlite'
-const SQL = Context.SQL;
+const OSQLite = require('osqlite'); //or 'osqlite'
+const SQL = OSQLite.SQL;
 
 class Sqlfs {
 
@@ -79,7 +79,7 @@ class Sqlfs {
       file_mode  : file_data.file_mode || ((S_IFMT & S_IFREG) | 0o666),
     };
 
-    await this._execute("insert", data);
+    await this._execute('insert', data);
     parent.children[data.file_name] = {...data, children : {}};
   }
 
@@ -90,13 +90,13 @@ class Sqlfs {
 
 
   async init_fs() {
-    if(this.ctx)
+    if(this.ctx) {
       await this.ctx.close();
+      await this.ctx.destroy();
+    }
 
-    if(fs.existsSync(this.index_path))
-      fs.unlinkSync(this.index_path);
+    this.ctx = OSQLite.build(this.index_path);
 
-    this.ctx = new Context(this.index_path);
     logger.info("New database structure in", this.index_path);
     //create table structure
     await this.ctx.raw(`
@@ -151,7 +151,7 @@ class Sqlfs {
     if(this.ctx)
       await this.ctx.close();
 
-    this.ctx = new Context(this.index_path);
+    this.ctx = OSQLite.build(this.index_path);
 
     let new_db = !await this.is_valid();
     if(new_db)
@@ -234,14 +234,14 @@ class Sqlfs {
       file_mode  : (S_IFMT & S_IFREG) | 0o666,
     };
 
-    await this._execute("insert", data); //no await
+    await this._execute('insert', data); //no await
     parent.children[file_name] = {...data, children : {}};
 
     await this.touch(parent_path);
   }
 
   async update(entry, data) {
-    await this._execute("update", data, {file_uid : entry.file_uid});
+    await this._execute('update', data, {file_uid : entry.file_uid});
     update(entry, data);
   }
 
@@ -356,7 +356,7 @@ class Sqlfs {
 
     var src_parent = await this._get_entry(path.dirname(file_path));
 
-    await this._execute("delete", {file_uid : entry.file_uid});
+    await this._execute('delete', {file_uid : entry.file_uid});
     delete src_parent.children[entry.file_name];
     await this.touch(path.dirname(file_path));
   }
@@ -376,7 +376,7 @@ class Sqlfs {
 
     var src_parent = await this._get_entry(path.dirname(directory_path));
 
-    await this._execute("delete", {file_uid : entry.file_uid});
+    await this._execute('delete', {file_uid : entry.file_uid});
     delete src_parent.children[entry.file_name];
     await this.touch(path.dirname(directory_path));
   }
@@ -431,7 +431,7 @@ class Sqlfs {
       file_mode  : (S_IFMT & S_IFDIR) | 0o777,
     };
 
-    await this._execute("insert", data);
+    await this._execute('insert', data);
     parent.children[data.file_name] = {...data, children : {}};
 
     await this.touch(parent_path);

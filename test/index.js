@@ -12,10 +12,11 @@ const guid = require('mout/random/guid');
 
 describe("initial test suite", function() {
   let ctx, tmpfile = tmppath("sqlite");
+  let creds = {backend : {type : "local"}, filename : tmpfile};
 
   before("should create a brand new fs", async () => {
     console.log("Working with", tmpfile);
-    ctx = new Sqlfs(tmpfile);
+    ctx = new Sqlfs(creds);
     await ctx.warmup();
   });
 
@@ -40,7 +41,7 @@ describe("initial test suite", function() {
 
   it("should have to trouble closing and opening again", async () => {
     await ctx.ctx.close();
-    ctx = new Sqlfs(tmpfile);
+    ctx = new Sqlfs(creds);
     await ctx.warmup();
   });
 

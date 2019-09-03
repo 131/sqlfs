@@ -11,6 +11,8 @@ const Sqlfs  = require('..');
 
 describe("serialize/load test suite", function() {
   let ctx, tmpfile = tmppath("sqlite");
+  let creds = {backend : {type : "local"}, filename : tmpfile};
+
   let mock = [{
     "file_path"  : "/this/is/a/path/to/check/withafile",
     "file_size"  : 0,
@@ -20,7 +22,7 @@ describe("serialize/load test suite", function() {
 
   before("should create a brand new fs", async () => {
     console.log("Working with", tmpfile);
-    ctx = new Sqlfs(tmpfile);
+    ctx = new Sqlfs(creds);
     await ctx.warmup();
   });
 
