@@ -159,6 +159,12 @@ class Sqlfs {
 
     //now computing all stuffs
     this.entries = await this._compute();
+
+    this.ctx.on("remote_update", async () => {
+      console.log("Got remote update order, recompute everything");
+      this.entries = await this._compute();
+    });
+
     return new_db;
   }
 
