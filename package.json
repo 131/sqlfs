@@ -1,6 +1,6 @@
 {
   "name": "sqlitefs",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "A sqlite powered inode table (for cloudfs, mostly)",
   "main": "index.js",
   "scripts": {
