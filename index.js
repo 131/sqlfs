@@ -28,8 +28,9 @@ const SQL = OSQLite.SQL;
 
 class Sqlfs {
 
-  constructor(index_path) {
+  constructor(index_path, {allow_new} = {allow_new : false}) {
     this.index_path = index_path;
+    this.options = {allow_new};
   }
 
   async _execute(verb, ...args) {
@@ -154,8 +155,12 @@ class Sqlfs {
     this.ctx = OSQLite.build(this.index_path);
 
     let new_db = !await this.is_valid();
-    if(new_db)
+    if(new_db) {
+      if(!this.options.allow_new)
+        throw `Cannot init new database as allow_new options is not set`;
+
       await this.init_fs(); //re-init all fs
+    }
 
     //now computing all stuffs
     this.entries = await this._compute();

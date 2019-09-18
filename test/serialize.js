@@ -22,7 +22,7 @@ describe("serialize/load test suite", function() {
 
   before("should create a brand new fs", async () => {
     console.log("Working with", tmpfile);
-    ctx = new Sqlfs(creds);
+    ctx = new Sqlfs(creds, {allow_new : true});
     await ctx.warmup();
   });
 
