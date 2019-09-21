@@ -133,6 +133,8 @@ describe("initial test suite", function() {
     let new_name   = "newfilename";
     await ctx.touch(`/${file_name}`);
 
+    await ctx.touch(`/${file_name}_2`);
+
     //this does nothing (nor breaks anything)
     await ctx.rename(`/${file_name}`, `/${file_name}`);
 
@@ -152,6 +154,19 @@ describe("initial test suite", function() {
     } catch(err) {
       expect(err).to.eql(fuse.ENOENT);
     }
+
+
+    //now rename a second file to new_name
+    await ctx.rename(`/${file_name}_2`, `/${new_name}`);
+    //old file is missing
+    try {
+      await ctx.getattr(`/${file_name}_2`);
+      expect().to.fail("Never here");
+    } catch(err) {
+      expect(err).to.eql(fuse.ENOENT);
+    }
+
+
   });
 
   it("should support recursive mkdir", async () => {

@@ -348,6 +348,16 @@ class Sqlfs {
     var src_parent = await this._get_entry(path.dirname(src_path));
     var dst_parent = await this._get_entry(path.dirname(dest_path));
 
+    let dst = await this._check_entry(dest_path);
+    if(dst) {
+      if((S_IFMT & src.file_mode) == S_IFREG) {
+        if((S_IFMT & dst.file_mode) == S_IFREG) {
+          //source and remote are files, should unlink dest first
+          await this._execute('delete', {file_uid : dst.file_uid});
+        }
+      }
+    }
+
     delete src_parent.children[src.file_name];
     await this.update(src, {
       file_name  : path.basename(dest_path),
